@@ -1,0 +1,26 @@
+html {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+div {
+    margin: 5;
+}
+
+span {
+    padding-left: 5;
+}
+
+span.hand {
+    display: none;
+}
+span.local {
+    display: none;
+}
+
+span.hand[data-raised=true] {
+    display: inline;
+}
+
+span.local[data-local=true] {
+    display: inline;
+}

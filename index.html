@@ -1,0 +1,122 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,1,0" />
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <script src="https://cdn.jsdelivr.net/npm/handlebars@latest/dist/handlebars.js"></script>
+  <script crossorigin src="https://unpkg.com/@daily-co/daily-js"></script>
+
+  <script id="participant-row-template" type="text/x-handlebars-template">
+    {{#each participants}}
+      <div id="participantRow">
+        <span class="hand material-symbols-outlined" data-raised="{{raised user_id}}">back_hand</span>
+        <span class="hand" data-raised="{{raised user_id}}">({{raised-order user_id}})</span>
+        <span>{{user_name}}</span>
+        <span class="local" data-local="{{local}}">(you)</span>
+      </div>
+    {{/each}}
+  </script>
+  <body>
+    <script>
+      
+      // right now I'm maintaining the hand raise state f participants locally in each individual client.  The benefit of 
+      // this is that I don't have to create/maitaine a server component for the application - static HTML/Javascript does the job.
+
+      // There are potential problems of not using a centralized (server-based) solution however:
+      // - its pretty brittle - clients can get out of sync and there is no single source of truth they can return to in order to reset
+      // - for newly joined participants there is no easy way to determine the initial hand raise state of the participants
+
+      const raisedHandsStore = {
+        raisedParticipants: [], //all of the current participants that have told us their hand raised status
+        isRaised: false //the hand raised status of the local participant
+      }
+
+      Handlebars.registerHelper('raised', function (userid) {
+        return (raisedHandsStore.raisedParticipants.indexOf(userid) === -1) ? false : true;
+      })
+
+      Handlebars.registerHelper('raised-order', function (userid) {
+        return raisedHandsStore.raisedParticipants.indexOf(userid);
+      })
+
+      const source = document.getElementById("participant-row-template").innerHTML;
+      const participantRowTemplate = Handlebars.compile(source);
+      
+      const callFrame = window.DailyIframe.createFrame();
+
+      callFrame.on('participant-joined', (e)=> {
+
+        //send my current hand raise state to the newly joined participant
+        console.log(`Sending hand raise status to ${e.participant.session_id} (${raisedHandsStore.isRaised})`);
+
+        // It doesn't seem like send is getting back to
+        // the newly joined participant for some reason
+        // When is the participant ready to receive app messages?
+        callFrame.sendAppMessage({ 
+          action: 'toggle-hand-raise',
+          user_id: callFrame.participants().local.user_id,
+          is_raised: raisedHandsStore.isRaised
+        }, e.participant.session_id);  
+
+        renderParticipants();
+      });
+      
+      callFrame.on('participant-updated', (e)=> {
+        renderParticipants();
+      });
+      
+      callFrame.on('participant-left', (e)=> {
+        renderParticipants();
+      });
+      
+      callFrame.on('app-message', (e) => {
+        console.log(e);
+        if (e.data.action === 'toggle-hand-raise') {
+          console.log(`Received hand raise status update`);
+          addRemoveRaise(e.data.user_id, e.data.is_raised);
+        }
+        renderParticipants();
+      })
+
+      function joinCall() {
+        callFrame.join({ url: 'https://devindemo.daily.co/testroom' });
+      }
+
+      function renderParticipants() {
+        console.log(`Rendering ${callFrame.participantCounts().present} Participants`);
+        
+        var html = participantRowTemplate({ participants: callFrame.participants()});
+        let list = document.getElementById("participantList")
+        list.innerHTML = html;
+      }
+
+      //this is yucky - I think what I'd prefer to do is have a central server be the source of truth for maintaining this state - airtable?
+      function toggleHandRaise(e) {
+        raisedHandsStore.isRaised = !raisedHandsStore.isRaised;
+
+        addRemoveRaise(callFrame.participants().local.user_id, raisedHandsStore.isRaised);
+
+        callFrame.sendAppMessage({ 
+          action: 'toggle-hand-raise',
+          user_id: callFrame.participants().local.user_id,
+          is_raised: raisedHandsStore.isRaised
+        }, '*');
+
+        e.innerHTML = (raisedHandsStore.isRaised) ? 'raised' : 'raise'; 
+        renderParticipants();
+      }
+
+      function addRemoveRaise(userid, isRaised) {
+        if (isRaised) {
+          raisedHandsStore.raisedParticipants.indexOf(userid) === -1 ? raisedHandsStore.raisedParticipants.push(userid) : console.log("This item already exists");
+        } else {
+          raisedHandsStore.raisedParticipants.pop(userid);
+        }
+      }
+
+    </script>
+    <div><button id="joinCall" onclick="joinCall(this)">join</button></div>
+    <div id="participantList"></div>
+    <div><button id="toggleHandRaise" value="false" onclick="toggleHandRaise(this)">raise</button></div>
+  </body>
+</html>
