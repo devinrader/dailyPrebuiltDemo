@@ -8,7 +8,7 @@
 
   <script id="participant-row-template" type="text/x-handlebars-template">
     {{#each participants}}
-      <div id="participantRow">
+      <div id="participantRow" data-userid="{{user_id}}">
         <span class="hand material-symbols-outlined" data-raised="{{raised user_id}}">back_hand</span>
         <span class="hand" data-raised="{{raised user_id}}">({{raised-order user_id}})</span>
         <span>{{user_name}}</span>
@@ -19,15 +19,15 @@
   <body>
     <script>
       
-      // right now I'm maintaining the hand raise state f participants locally in each individual client.  The benefit of 
-      // this is that I don't have to create/maitaine a server component for the application - static HTML/Javascript does the job.
+      // right now I'm maintaining the hand raise state of participants locally in each individual client.  The benefit of 
+      // this is that I don't have to create/maintain a server component for the application - static HTML/Javascript does the job.
 
       // There are potential problems of not using a centralized (server-based) solution however:
       // - its pretty brittle - clients can get out of sync and there is no single source of truth they can return to in order to reset
       // - for newly joined participants there is no easy way to determine the initial hand raise state of the participants
 
       const raisedHandsStore = {
-        raisedParticipants: [], //all of the current participants that have told us their hand raised status
+        raisedParticipants: [], //all of the current participants that have told us their hand raised status - trying to get rid of this by just using data- tags in the html
         isRaised: false //the hand raised status of the local participant
       }
 
