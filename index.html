@@ -12,6 +12,7 @@
         <span class="hand material-symbols-outlined" data-raised="{{raised user_id}}">back_hand</span>
         <span class="hand" data-raised="{{raised user_id}}">({{raised-order user_id}})</span>
         <span>{{user_name}}</span>
+        <span>{{user_id}}</span>
         <span class="local" data-local="{{local}}">(you)</span>
       </div>
     {{/each}}
@@ -26,7 +27,10 @@
       // - its pretty brittle - clients can get out of sync and there is no single source of truth they can return to in order to reset
       // - for newly joined participants there is no easy way to determine the initial hand raise state of the participants
 
+      let initInterval;
+
       const raisedHandsStore = {
+        //isInitialized: false,
         raisedParticipants: [], //all of the current participants that have told us their hand raised status - trying to get rid of this by just using data- tags in the html
         isRaised: false //the hand raised status of the local participant
       }
@@ -45,19 +49,6 @@
       const callFrame = window.DailyIframe.createFrame();
 
       callFrame.on('participant-joined', (e)=> {
-
-        //send my current hand raise state to the newly joined participant
-        console.log(`Sending hand raise status to ${e.participant.session_id} (${raisedHandsStore.isRaised})`);
-
-        // It doesn't seem like send is getting back to
-        // the newly joined participant for some reason
-        // When is the participant ready to receive app messages?
-        callFrame.sendAppMessage({ 
-          action: 'toggle-hand-raise',
-          user_id: callFrame.participants().local.user_id,
-          is_raised: raisedHandsStore.isRaised
-        }, e.participant.session_id);  
-
         renderParticipants();
       });
       
@@ -71,15 +62,38 @@
       
       callFrame.on('app-message', (e) => {
         console.log(e);
+
         if (e.data.action === 'toggle-hand-raise') {
           console.log(`Received hand raise status update`);
+          clearInterval(initInterval);
           addRemoveRaise(e.data.user_id, e.data.is_raised);
+          renderParticipants();
         }
-        renderParticipants();
+
+        if (e.data.action === 'poll-hand-raise') {
+          console.log(`Received hand raise poll request`);
+          callFrame.sendAppMessage({ 
+            action: 'toggle-hand-raise',
+            user_id: callFrame.participants().local.user_id,
+            is_raised: raisedHandsStore.isRaised
+          }, e.data.sessionId);  
+        }
       })
 
       function joinCall() {
-        callFrame.join({ url: 'https://devindemo.daily.co/testroom' });
+        callFrame.join({ url: 'https://devindemo.daily.co/testroom' }).then((e) => {
+
+          if (callFrame.participantCounts().present > 1) {
+            initInterval = setInterval(() => {
+              console.log('Polling for hand raised status');
+              callFrame.sendAppMessage({ 
+                action: 'poll-hand-raise',
+                sessionId: e.session_id
+              }, '*');  
+            }, 1000);
+          }
+
+        });
       }
 
       function renderParticipants() {
@@ -108,10 +122,14 @@
 
       function addRemoveRaise(userid, isRaised) {
         if (isRaised) {
+          console.log(`Adding userid ${userid}`)
           raisedHandsStore.raisedParticipants.indexOf(userid) === -1 ? raisedHandsStore.raisedParticipants.push(userid) : console.log("This item already exists");
         } else {
-          raisedHandsStore.raisedParticipants.pop(userid);
+          console.log(`Removing userid ${userid}`)
+          raisedHandsStore.raisedParticipants = raisedHandsStore.raisedParticipants.filter(e => e!==userid);
         }
+
+        console.log(raisedHandsStore.raisedParticipants);
       }
 
     </script>
